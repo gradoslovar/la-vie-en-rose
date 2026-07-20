@@ -1,0 +1,23 @@
+# Fly.io config for the backend API.
+# Deploy from repo root: fly deploy -c infra/fly.backend.toml
+# First-time setup: fly launch, fly postgres create (CDG), fly postgres attach.
+app = "lvr-backend"
+primary_region = "cdg"
+
+[build]
+  dockerfile = "../backend/Dockerfile"
+
+[env]
+  ENVIRONMENT = "production"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+[[http_service.checks]]
+  path = "/health"
+  interval = "30s"
+  timeout = "5s"
