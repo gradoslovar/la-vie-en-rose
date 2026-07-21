@@ -1,4 +1,4 @@
-# CLAUDE.md - Working Instructions
+# CLAUDE.md — Working Instructions
 
 Read `PROJECT.md` first. It describes the project: the mission, the
 architecture, the decisions, the vocabulary. This file tells you how to work
@@ -18,7 +18,7 @@ on it.
    Proof of Walk anchoring. All technologies assembled and in harmony.
 2. **UI can be ugly and basic in early iterations.** Do not spend effort on
    visual polish before the backend is solid.
-3. **The facade comes last - and the bar is very high.** When the project
+3. **The facade comes last — and the bar is very high.** When the project
    reaches the look & feel phase, the owner has huge expectations: the site
    must be truly beautiful. Do not treat design as an afterthought when that
    phase arrives; treat it as a project of its own.
@@ -30,17 +30,25 @@ on it.
   scope must be reflected there. When a decision changes, the document
   changes with it.
 - **No dogma.** Decisions in `PROJECT.md` are current best choices, not
-  scripture. If life or inspiration makes a better case, propose the change -
+  scripture. If life or inspiration makes a better case, propose the change —
   and record it.
-- **The owner is the source of truth** - over GPS traces, over data sources,
+- **The owner is the source of truth** — over GPS traces, over data sources,
   over defaults. When in doubt about scope or intent, ask; don't assume.
 - Open questions are tracked in `PROJECT.md` §8. Don't silently resolve them
   in code; resolve them explicitly, then record the resolution.
 
 ## Engineering conventions
 
-- TypeScript everywhere, strict mode.
-- Monorepo: web app, ingestion worker, infra, chain package.
-- Real-app discipline: CI must pass (typecheck, lint, tests) before merge;
+- **Backend: Python 3.12+, FastAPI.** uv for dependencies, ruff for
+  lint/format, Pydantic v2, SQLAlchemy 2 + GeoAlchemy2 (raw SQL is welcome
+  for serious PostGIS queries), Alembic for migrations, pytest.
+- **Frontend: TypeScript strict, Next.js.** The API contract is FastAPI's
+  OpenAPI schema; the typed TS client is generated from it — never
+  hand-written. CI verifies the contract.
+- Monorepo layout: `backend/` (API + worker + migrations), `frontend/`,
+  `docs/`, `infra/`.
+- The database schema follows `docs/database-schema.md`; keep migrations and
+  that document consistent.
+- Real-app discipline: CI must pass (lint, types, tests) before merge;
   preview deploys on PRs; deploy on merge to main.
 - The site is bilingual (EN/FR); do not hardcode user-facing strings.

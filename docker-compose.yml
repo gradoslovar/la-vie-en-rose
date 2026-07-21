@@ -1,0 +1,20 @@
+# Local development: PostgreSQL + PostGIS
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_USER: lvr
+      POSTGRES_PASSWORD: lvr
+      POSTGRES_DB: lvr
+    ports:
+      - "5432:5432"
+    volumes:
+      - lvr-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lvr"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  lvr-pgdata:
