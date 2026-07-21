@@ -1,5 +1,5 @@
 ## Description
-Even if you are lazy
+<!-- Even if you are lazy.-->
 
 ## Type of change
 - [ ] Bug fix (non-breaking change which fixes an issue)
