@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 
-from app.api import health
+from app.core import health
 
 app = FastAPI(
     title="la-vie-en-rose",

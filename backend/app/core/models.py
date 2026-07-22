@@ -4,7 +4,6 @@ from datetime import datetime
 
 from geoalchemy2 import Geometry
 from sqlalchemy import (
-    ARRAY,
     REAL,
     BigInteger,
     Boolean,
@@ -27,6 +26,19 @@ class TimestampMixin:
     updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
 
 
+class Arrondissement(Base):
+    """A district as a first-class entity: own page, name, stats.
+
+    Segment membership is computed spatially against these polygons.
+    """
+
+    __tablename__ = "arrondissement"
+
+    number: Mapped[int] = mapped_column(SmallInteger, primary_key=True)  # 1-20
+    name: Mapped[str] = mapped_column(Text)
+    geom = mapped_column(Geometry(geometry_type="MULTIPOLYGON", srid=4326))
+
+
 class Voie(TimestampMixin, Base):
     """Official named street from the Paris registry — the countable denominator."""
 
@@ -36,7 +48,6 @@ class Voie(TimestampMixin, Base):
     official_id: Mapped[str] = mapped_column(Text, unique=True)
     name: Mapped[str] = mapped_column(Text)
     type: Mapped[str | None] = mapped_column(Text)
-    arrondissements: Mapped[list[int] | None] = mapped_column(ARRAY(SmallInteger))
     quartier: Mapped[str | None] = mapped_column(Text)
     name_origin_fr: Mapped[str | None] = mapped_column(Text)
     name_history_fr: Mapped[str | None] = mapped_column(Text)
@@ -52,6 +63,9 @@ class Segment(TimestampMixin, Base):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     osm_way_id: Mapped[int | None] = mapped_column(BigInteger)
     voie_id: Mapped[int | None] = mapped_column(ForeignKey("voie.id"))
+    arrondissement_number: Mapped[int | None] = mapped_column(
+        ForeignKey("arrondissement.number")
+    )  # set by spatial join
     kind: Mapped[str] = mapped_column(Text)  # street | park_path | cemetery_path | other
     geom = mapped_column(Geometry(geometry_type="LINESTRING", srid=4326))
     length_m: Mapped[float] = mapped_column(Float)
@@ -79,13 +93,18 @@ class Walk(TimestampMixin, Base):
     status: Mapped[str] = mapped_column(Text, default="ingested")  # ingested|matched|anchored
 
 
-class WalkSegment(Base):
-    """Coverage: which walk covered which segment, and how."""
+class Coverage(Base):
+    """Which segment was covered, by what.
 
-    __tablename__ = "walk_segment"
+    walk_id is nullable: a standalone manual correction covers a segment with
+    no walk attached ("I know I walked this, don't remember which walk").
+    """
 
-    walk_id: Mapped[int] = mapped_column(ForeignKey("walk.id"), primary_key=True)
-    segment_id: Mapped[int] = mapped_column(ForeignKey("segment.id"), primary_key=True)
+    __tablename__ = "coverage"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    walk_id: Mapped[int | None] = mapped_column(ForeignKey("walk.id"))  # null = standalone
+    segment_id: Mapped[int] = mapped_column(ForeignKey("segment.id"))
     covered_fraction: Mapped[float] = mapped_column(REAL)
     method: Mapped[str] = mapped_column(Text)  # auto | manual
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())

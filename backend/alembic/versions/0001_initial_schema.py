@@ -17,12 +17,20 @@ def upgrade() -> None:
     op.execute("CREATE EXTENSION IF NOT EXISTS postgis")
 
     op.execute("""
+        CREATE TABLE arrondissement (
+            number SMALLINT PRIMARY KEY,
+            name TEXT NOT NULL,
+            geom geometry(MultiPolygon, 4326) NOT NULL
+        )
+    """)
+    op.execute("CREATE INDEX ix_arrondissement_geom ON arrondissement USING GIST (geom)")
+
+    op.execute("""
         CREATE TABLE voie (
             id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
             official_id TEXT NOT NULL UNIQUE,
             name TEXT NOT NULL,
             type TEXT,
-            arrondissements SMALLINT[],
             quartier TEXT,
             name_origin_fr TEXT,
             name_history_fr TEXT,
@@ -38,6 +46,7 @@ def upgrade() -> None:
             id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
             osm_way_id BIGINT,
             voie_id BIGINT REFERENCES voie(id),
+            arrondissement_number SMALLINT REFERENCES arrondissement(number),
             kind TEXT NOT NULL,
             geom geometry(LineString, 4326) NOT NULL,
             length_m DOUBLE PRECISION NOT NULL,
@@ -49,6 +58,7 @@ def upgrade() -> None:
     """)
     op.execute("CREATE INDEX ix_segment_geom ON segment USING GIST (geom)")
     op.execute("CREATE INDEX ix_segment_voie ON segment (voie_id)")
+    op.execute("CREATE INDEX ix_segment_arr ON segment (arrondissement_number)")
 
     op.execute("""
         CREATE TABLE walk (
@@ -72,19 +82,25 @@ def upgrade() -> None:
     op.execute("CREATE INDEX ix_walk_walked_at ON walk (walked_at)")
 
     op.execute("""
-        CREATE TABLE walk_segment (
-            walk_id BIGINT NOT NULL REFERENCES walk(id),
+        CREATE TABLE coverage (
+            id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+            walk_id BIGINT REFERENCES walk(id),
             segment_id BIGINT NOT NULL REFERENCES segment(id),
             covered_fraction REAL NOT NULL,
             method TEXT NOT NULL,
             created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-            PRIMARY KEY (walk_id, segment_id),
             CONSTRAINT covered_fraction_range
                 CHECK (covered_fraction >= 0 AND covered_fraction <= 1),
             CONSTRAINT method_values CHECK (method IN ('auto', 'manual'))
         )
     """)
-    op.execute("CREATE INDEX ix_walk_segment_segment ON walk_segment (segment_id)")
+    op.execute("CREATE INDEX ix_coverage_segment ON coverage (segment_id)")
+    op.execute("CREATE INDEX ix_coverage_walk ON coverage (walk_id)")
+    # one auto match per (walk, segment); manual rows may repeat / be standalone
+    op.execute("""
+        CREATE UNIQUE INDEX ux_coverage_auto ON coverage (walk_id, segment_id)
+        WHERE method = 'auto'
+    """)
 
     op.execute("""
         CREATE TABLE correction (
@@ -124,10 +140,11 @@ def downgrade() -> None:
     for table in (
         "attestation",
         "correction",
-        "walk_segment",
+        "coverage",
         "walk",
         "segment",
         "voie",
+        "arrondissement",
         "setting",
     ):
         op.execute(f"DROP TABLE IF EXISTS {table}")
