@@ -1,0 +1,48 @@
+name: Scale machines
+
+# Machine count is an explicit decision, not an automatic reaction to traffic.
+# Use this to bring things up before sharing the site, and down while the
+# mission is quiet.
+
+on:
+  workflow_dispatch:
+    inputs:
+      app:
+        description: "Which app"
+        required: true
+        type: choice
+        options: [lvr-backend, lvr-frontend, lvr-db, all]
+      count:
+        description: "Machine count (0 stops the app)"
+        required: true
+        type: choice
+        options: ["0", "1", "2"]
+
+concurrency: scale
+
+env:
+  FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+jobs:
+  scale:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Guard against scaling the database to zero by accident
+        if: ${{ (inputs.app == 'lvr-db' || inputs.app == 'all') && inputs.count == '0' }}
+        run: |
+          echo "::warning::Scaling the database to 0 stops the site entirely."
+          echo "Data on the volume is preserved."
+
+      - name: Scale
+        run: |
+          if [ "${{ inputs.app }}" = "all" ]; then
+            apps="lvr-db lvr-backend lvr-frontend"
+          else
+            apps="${{ inputs.app }}"
+          fi
+          for app in $apps; do
+            flyctl scale count "${{ inputs.count }}" --app "$app" --yes
+            flyctl status --app "$app" || true
+          done

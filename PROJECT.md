@@ -93,7 +93,7 @@ Ideas I'm keeping warm: every street segment on the map linking to its attestati
 | Database       | **PostgreSQL + PostGIS** — the geospatial brain     |
 | Ingestion      | Python worker (webhook-driven, async jobs; Postgres-based queue) |
 | Chain          | Open: Solana or EVM L2; Arweave as storage placeholder |
-| Hosting        | **Fly.io** (decided) — CDG region, physically in Paris |
+| Hosting        | **Fly.io** (decided), `ams` region — app and database co-located. Self-managed Postgres + PostGIS for cost, with nightly verified backups; migration to Managed Postgres stays a `pg_dump` away. See `docs/infrastructure.md`. |
 | Repo           | **GitHub monorepo**: app, worker, infra, chain package |
 | CI/CD          | GitHub Actions: typecheck, lint, test, preview deploys on PRs, deploy on merge |
 | Infra          | As code (fly.toml / Terraform or Bicep), Dependabot, branch protection |

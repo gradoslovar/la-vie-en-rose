@@ -1,0 +1,99 @@
+name: Backup database
+
+# Nightly logical backup to object storage. This is the disaster recovery this
+# project relies on instead of a managed database — so it is tested, not assumed:
+# every run verifies the dump restores into a scratch Postgres before uploading.
+# A backup that has never been restored is not a backup.
+
+on:
+  schedule:
+    - cron: "17 3 * * *"   # 03:17 UTC daily
+  workflow_dispatch:
+
+concurrency: backup
+
+env:
+  FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    services:
+      verify:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_PASSWORD: verify
+          POSTGRES_USER: verify
+          POSTGRES_DB: verify
+        ports: ["5433:5432"]
+        options: >-
+          --health-cmd "pg_isready -U verify"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+
+    steps:
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Install postgres client and s3 tooling
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-16 awscli
+
+      - name: Open a tunnel to the database
+        run: |
+          flyctl proxy 15432:5432 -a lvr-db &
+          for i in $(seq 1 20); do
+            pg_isready -h 127.0.0.1 -p 15432 -U lvr && break
+            sleep 2
+          done
+
+      - name: Dump
+        env:
+          PGPASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+        run: |
+          STAMP=$(date -u +%Y-%m-%dT%H-%M-%SZ)
+          echo "STAMP=$STAMP" >> "$GITHUB_ENV"
+          pg_dump -h 127.0.0.1 -p 15432 -U lvr -d lvr \
+            --format=custom --no-owner --no-acl \
+            --file "lvr-$STAMP.dump"
+          ls -lh "lvr-$STAMP.dump"
+
+      - name: Verify the dump actually restores
+        env:
+          PGPASSWORD: verify
+        run: |
+          psql -h 127.0.0.1 -p 5433 -U verify -d verify \
+            -c "CREATE EXTENSION IF NOT EXISTS postgis;"
+          pg_restore -h 127.0.0.1 -p 5433 -U verify -d verify \
+            --no-owner --no-acl --exit-on-error "lvr-$STAMP.dump"
+          echo "tables restored:"
+          psql -h 127.0.0.1 -p 5433 -U verify -d verify -At \
+            -c "SELECT count(*) FROM information_schema.tables WHERE table_schema='public';"
+
+      - name: Upload to object storage
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.TIGRIS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.TIGRIS_SECRET_ACCESS_KEY }}
+          AWS_ENDPOINT_URL_S3: https://fly.storage.tigris.dev
+          AWS_REGION: auto
+        run: |
+          aws s3 cp "lvr-$STAMP.dump" "s3://lvr-backups/daily/lvr-$STAMP.dump" \
+            --endpoint-url "$AWS_ENDPOINT_URL_S3"
+
+      - name: Prune backups older than 90 days
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.TIGRIS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.TIGRIS_SECRET_ACCESS_KEY }}
+          AWS_ENDPOINT_URL_S3: https://fly.storage.tigris.dev
+          AWS_REGION: auto
+        run: |
+          CUTOFF=$(date -u -d '90 days ago' +%Y-%m-%d)
+          aws s3 ls s3://lvr-backups/daily/ --endpoint-url "$AWS_ENDPOINT_URL_S3" \
+          | awk '{print $4}' | while read -r key; do
+              [ -z "$key" ] && continue
+              d=$(echo "$key" | sed -n 's/^lvr-\([0-9-]\{10\}\)T.*/\1/p')
+              [ -z "$d" ] && continue
+              if [[ "$d" < "$CUTOFF" ]]; then
+                echo "pruning $key"
+                aws s3 rm "s3://lvr-backups/daily/$key" --endpoint-url "$AWS_ENDPOINT_URL_S3"
+              fi
+            done

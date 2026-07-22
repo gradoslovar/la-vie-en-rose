@@ -1,8 +1,15 @@
-# Fly.io config for the backend API.
-# Deploy from repo root: fly deploy -c infra/fly.backend.toml
-# First-time setup: fly launch, fly postgres create (CDG), fly postgres attach.
+# Fly.io config — backend API (the job consumer runs in-process).
+#
+# Deployed by .github/workflows/deploy.yml. Nothing here is run by hand.
+#
+# One machine serves HTTP and drains the job queue. Jobs are durable in
+# Postgres, so a restart mid-job loses nothing. If matching ever competes with
+# request latency, promote the worker to its own process group: set
+# WORKER_IN_PROCESS=false and add a [processes] block running
+# `uv run python -m app.worker`.
+
 app = "lvr-backend"
-primary_region = "cdg"
+primary_region = "ams"
 
 [build]
   dockerfile = "../backend/Dockerfile"
@@ -10,14 +17,24 @@ primary_region = "cdg"
 [env]
   ENVIRONMENT = "production"
 
+# Migrations run once per deploy, before the new version takes traffic.
+[deploy]
+  release_command = "uv run alembic upgrade head"
+
 [http_service]
   internal_port = 8000
   force_https = true
-  auto_stop_machines = "stop"
-  auto_start_machines = true
-  min_machines_running = 0
+  # No scale-to-zero: the machine consumes a job queue, not just HTTP requests.
+  # Scaling up/down is an explicit action (.github/workflows/scale.yml).
+  auto_stop_machines = "off"
+  auto_start_machines = false
+  min_machines_running = 1
 
 [[http_service.checks]]
   path = "/health"
   interval = "30s"
   timeout = "5s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

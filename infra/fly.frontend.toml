@@ -1,0 +1,22 @@
+# Fly.io config — Next.js frontend.
+#
+# Deployed by .github/workflows/deploy.yml. Nothing here is run by hand.
+# No scale-to-zero: machine count is an explicit decision made through
+# .github/workflows/scale.yml, not an automatic reaction to traffic.
+
+app = "lvr-frontend"
+primary_region = "ams"
+
+[build]
+  dockerfile = "../frontend/Dockerfile"
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = "off"
+  auto_start_machines = false
+  min_machines_running = 1
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
