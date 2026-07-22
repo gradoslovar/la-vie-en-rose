@@ -1,0 +1,81 @@
+name: Provision infrastructure
+
+# Creates the Fly apps, the database volume and the object-storage bucket.
+# Idempotent: safe to re-run — existing resources are left alone.
+# Run manually, once, and again only when infrastructure changes.
+
+on:
+  workflow_dispatch:
+    inputs:
+      volume_size_gb:
+        description: "Postgres volume size in GB (only used at first creation)"
+        required: true
+        default: "10"
+
+concurrency: infra
+
+env:
+  FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+  REGION: ams
+
+jobs:
+  provision:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Create apps if missing
+        run: |
+          for app in lvr-db lvr-backend lvr-frontend; do
+            if flyctl apps list | grep -qw "$app"; then
+              echo "$app already exists"
+            else
+              flyctl apps create "$app" --org personal
+            fi
+          done
+
+      - name: Create Postgres volume if missing
+        run: |
+          if flyctl volumes list -a lvr-db | grep -qw pgdata; then
+            echo "volume pgdata already exists"
+          else
+            flyctl volumes create pgdata \
+              --app lvr-db \
+              --region "$REGION" \
+              --size "${{ inputs.volume_size_gb }}" \
+              --yes
+          fi
+
+      - name: Set Postgres password if unset
+        run: |
+          if flyctl secrets list -a lvr-db | grep -qw POSTGRES_PASSWORD; then
+            echo "POSTGRES_PASSWORD already set"
+          else
+            echo "::error::POSTGRES_PASSWORD is not set on lvr-db."
+            echo "Add it once as a GitHub secret and re-run, or set it via the Fly dashboard."
+            exit 1
+          fi
+
+      - name: Create object storage bucket for backups if missing
+        run: |
+          if flyctl storage list | grep -qw lvr-backups; then
+            echo "bucket lvr-backups already exists"
+          else
+            flyctl storage create --name lvr-backups --org personal --yes
+            echo "::notice::Bucket created. Copy the printed credentials into the"
+            echo "::notice::TIGRIS_ACCESS_KEY_ID / TIGRIS_SECRET_ACCESS_KEY GitHub secrets."
+          fi
+
+      - name: Wire the backend to the database
+        run: |
+          flyctl secrets set \
+            DATABASE_URL="postgresql+asyncpg://lvr:${{ secrets.POSTGRES_PASSWORD }}@lvr-db.internal:5432/lvr" \
+            --app lvr-backend --stage
+          echo "DATABASE_URL staged; applied on next deploy."
+
+      - name: Point the frontend at the API
+        run: |
+          flyctl secrets set \
+            NEXT_PUBLIC_API_URL="https://lvr-backend.fly.dev" \
+            --app lvr-frontend --stage

@@ -1,0 +1,58 @@
+name: Deploy
+
+# Deploys on merge to main. Database first (so a schema-dependent backend never
+# starts against an older database), then backend (migrations run via the
+# release_command in fly.backend.toml), then frontend.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - "frontend/**"
+      - "infra/**"
+      - ".github/workflows/deploy.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+env:
+  FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+jobs:
+  database:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: Deploy Postgres
+        run: flyctl deploy -c infra/fly.postgres.toml --remote-only
+
+  backend:
+    needs: database
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: Deploy backend (runs alembic upgrade head first)
+        run: flyctl deploy -c infra/fly.backend.toml --remote-only
+      - name: Verify health
+        run: |
+          for i in $(seq 1 10); do
+            if curl -fsS https://lvr-backend.fly.dev/health | grep -q '"status":"ok"'; then
+              echo "backend healthy"; exit 0
+            fi
+            echo "waiting for backend… ($i/10)"; sleep 10
+          done
+          echo "::error::backend did not become healthy"; exit 1
+
+  frontend:
+    needs: backend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: Deploy frontend
+        run: flyctl deploy -c infra/fly.frontend.toml --remote-only

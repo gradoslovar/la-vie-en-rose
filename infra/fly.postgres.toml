@@ -1,0 +1,34 @@
+# Fly.io config — PostgreSQL + PostGIS (self-managed).
+#
+# Deliberately NOT `fly postgres create`: Fly's Postgres image ships without
+# PostGIS, and this project cannot exist without it. This is an ordinary Fly app
+# running the official upstream `postgis/postgis` image with a volume attached —
+# maintained by the PostGIS project, and stock Postgres underneath, so migrating
+# to Managed Postgres later is a pg_dump/pg_restore away.
+#
+# Trade-offs accepted (see docs/infrastructure.md):
+#   single node, no automatic failover, we own version upgrades.
+#   Backups are automated nightly to object storage (.github/workflows/backup.yml).
+#
+# Not exposed to the public internet: reachable only on Fly's private network
+# as lvr-db.internal:5432, and from CI via `fly proxy`.
+
+app = "lvr-db"
+primary_region = "ams"
+
+[build]
+  image = "postgis/postgis:16-3.4"
+
+[env]
+  POSTGRES_DB = "lvr"
+  POSTGRES_USER = "lvr"
+  PGDATA = "/var/lib/postgresql/data/pgdata"
+
+[mounts]
+  source = "pgdata"
+  destination = "/var/lib/postgresql/data"
+
+# Machine count is controlled on demand via .github/workflows/scale.yml
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "1gb"

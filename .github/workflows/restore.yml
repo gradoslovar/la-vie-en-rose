@@ -1,0 +1,61 @@
+name: Restore database
+
+# Deliberately manual, deliberately awkward: this overwrites live data.
+# Requires typing the exact confirmation phrase.
+
+on:
+  workflow_dispatch:
+    inputs:
+      backup_key:
+        description: "Backup file, e.g. daily/lvr-2026-07-21T03-17-00Z.dump"
+        required: true
+      confirm:
+        description: "Type RESTORE to confirm overwriting the live database"
+        required: true
+
+concurrency: restore
+
+env:
+  FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check confirmation
+        run: |
+          [ "${{ inputs.confirm }}" = "RESTORE" ] || {
+            echo "::error::Confirmation phrase not given. Nothing was changed."; exit 1; }
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Install tooling
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-16 awscli
+
+      - name: Fetch the backup
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.TIGRIS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.TIGRIS_SECRET_ACCESS_KEY }}
+          AWS_ENDPOINT_URL_S3: https://fly.storage.tigris.dev
+          AWS_REGION: auto
+        run: |
+          aws s3 cp "s3://lvr-backups/${{ inputs.backup_key }}" restore.dump \
+            --endpoint-url "$AWS_ENDPOINT_URL_S3"
+
+      - name: Open a tunnel to the database
+        run: |
+          flyctl proxy 15432:5432 -a lvr-db &
+          for i in $(seq 1 20); do
+            pg_isready -h 127.0.0.1 -p 15432 -U lvr && break
+            sleep 2
+          done
+
+      - name: Restore
+        env:
+          PGPASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+        run: |
+          pg_restore -h 127.0.0.1 -p 15432 -U lvr -d lvr \
+            --clean --if-exists --no-owner --no-acl --exit-on-error restore.dump
+          echo "restored from ${{ inputs.backup_key }}"
