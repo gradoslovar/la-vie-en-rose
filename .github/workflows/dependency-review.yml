@@ -24,7 +24,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: actions/dependency-review-action@v5
+      - uses: actions/dependency-review-action@v5.0.0
         with:
           # `low` is the action's default and blocks on advisories that often
           # have no available fix, especially in transitive dependencies. A
