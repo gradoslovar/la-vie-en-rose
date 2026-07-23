@@ -19,6 +19,7 @@ dev = [
     "pytest>=8.3",
     "pytest-asyncio>=0.24",
     "ruff>=0.6",
+    "pyright>=1.1.380",
 ]
 
 [tool.ruff]
@@ -31,3 +32,17 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+markers = [
+    "db: requires a live PostGIS database (see tests/conftest.py)",
+]
+
+# Type checking. `standard` rather than `strict` on purpose: GeoAlchemy2 ships
+# incomplete type information, and strict mode reports our own correct schema
+# code as errors. Standard catches the mistakes that matter — a model and a
+# query disagreeing — without teaching us to ignore the output.
+[tool.pyright]
+include = ["app", "tests"]
+exclude = ["alembic/versions"]
+pythonVersion = "3.12"
+typeCheckingMode = "standard"
+reportMissingTypeStubs = false

@@ -1,14 +1,91 @@
+# Dependency updates — see .claude/rules/ci-cd.md § Dependabot for the reasoning.
+#
+# Design constraints, each of which was a real failure before it was fixed:
+#
+#   * GROUPED. An earlier ungrouped config produced six PRs in two days for a
+#     repo with ~200 lines of code. The benchmark to hold: fewer than five
+#     dependency PRs per week. More than that is a configuration bug, not a
+#     fact of life.
+#   * COOLDOWN. No update is proposed until it has been public for 3 days.
+#     This is supply-chain protection: a compromised or mistaken release
+#     usually surfaces within hours, and 3 days costs nothing on routine
+#     bumps. Security updates ignore this — they are not governed by the
+#     schedule at all.
+#   * MAJORS ARE NEVER GROUPED. A major version can break the build and needs
+#     a human reading a changelog. Grouping one with harmless patches means
+#     either blocking the safe updates or merging the risky one unread.
+#   * NOTHING IS AUTO-MERGED. Auto-merge is a legitimate practice, but the
+#     2026 supply-chain attacks (Axios among them) moved published guidance
+#     away from it, and this project has no test coverage worth trusting as a
+#     gate yet. Revisit only when the test suite is real.
+#
+# Security alerts, malware alerts and grouped security updates are enabled in
+# repository settings, not here. This file governs routine version updates only.
+
 version: 2
 updates:
-  - package-ecosystem: "pip"
+  # ---------------------------------------------------------------- backend
+  - package-ecosystem: "pip"          # reads backend/pyproject.toml
     directory: "/backend"
     schedule:
       interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    cooldown:
+      default-days: 3
+    labels: ["dependencies", "backend"]
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(deps-dev)"
+    groups:
+      # Runtime dependencies: a break here breaks the application.
+      backend-runtime:
+        dependency-type: "production"
+        update-types: ["minor", "patch"]
+      # Tooling: a break here breaks CI, which is loud and harmless.
+      backend-tooling:
+        dependency-type: "development"
+        update-types: ["minor", "patch"]
+
+  # --------------------------------------------------------------- frontend
   - package-ecosystem: "npm"
     directory: "/frontend"
     schedule:
       interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    cooldown:
+      default-days: 3
+    labels: ["dependencies", "frontend"]
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(deps-dev)"
+    groups:
+      frontend-runtime:
+        dependency-type: "production"
+        update-types: ["minor", "patch"]
+      frontend-tooling:
+        dependency-type: "development"
+        update-types: ["minor", "patch"]
+
+  # -------------------------------------------------------- github actions
+  # Actions are pinned to tags today. When they are pinned to commit SHAs
+  # (see .claude/rules/ci-cd.md), Dependabot updates the SHAs and this entry
+  # keeps working unchanged.
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 3
+    cooldown:
+      default-days: 3
+    labels: ["dependencies", "ci"]
+    commit-message:
+      prefix: "chore(ci)"
+    groups:
+      # Actions move together often enough that one PR is the right unit,
+      # including majors: an action major is usually a runtime bump, not an
+      # API change.
+      github-actions:
+        patterns: ["*"]

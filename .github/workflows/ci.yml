@@ -1,3 +1,26 @@
+# Continuous integration — every check that must pass before code reaches main.
+#
+# See .claude/rules/ci-cd.md for the rules this file implements.
+#
+# TWO THINGS NOT TO UNDO:
+#
+#   1. JOB NAMES ARE `backend` AND `frontend`. Branch protection on main
+#      requires these exact contexts. Renaming or splitting a job makes
+#      protection wait forever for a check that will never report, and no PR
+#      can merge. If a job must be renamed, update the branch protection rule
+#      in the same change.
+#
+#   2. THERE ARE NO PATH FILTERS, DELIBERATELY. Filters look like a free speed
+#      win and are a gate hole: a changed file matching no filter causes every
+#      gated job to skip, and a skipped job counts as green. The result is a
+#      PR merging with zero checks actually run. Every push runs everything.
+#      This project is small; correctness is cheaper than the saved minutes.
+#
+# Actions are pinned to major tags. Pinning to full commit SHAs is the
+# hardened standard and is tracked as a task — it is not done here because a
+# fabricated SHA breaks CI outright, and each one must be read from the
+# action's repository. Dependabot maintains either form.
+
 name: CI
 
 on:
@@ -5,37 +28,107 @@ on:
     branches: [main]
   pull_request:
 
+# A new push to a PR makes the previous run's result irrelevant.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
 jobs:
   backend:
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: backend
+
+    # The database is the point of this job. Without it, ruff and a handful of
+    # unit tests pass while the schema, the migration and every PostGIS query
+    # go completely unexercised — a dependency bump that breaks database
+    # behaviour would report green. The image matches production and local
+    # development exactly, so all three environments agree.
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: lvr
+          POSTGRES_PASSWORD: lvr
+          POSTGRES_DB: lvr
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql+asyncpg://lvr:lvr@localhost:5432/lvr
+      # Turns "no database available, skipping" into a hard failure. Locally a
+      # developer without Postgres running gets skips; CI must never silently
+      # skip the tests that are the reason this job has a database.
+      REQUIRE_DB: "1"
+
     steps:
       - uses: actions/checkout@v4
+
       - uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+
       - name: Install dependencies
-        run: uv sync
+        run: uv sync --frozen
+
       - name: Lint (ruff)
         run: uv run ruff check .
+
       - name: Format check (ruff)
         run: uv run ruff format --check .
+
+      # Ruff catches style, not types. On a SQLAlchemy codebase the type
+      # checker is what catches a model and a query disagreeing.
+      - name: Type check (pyright)
+        run: uv run pyright
+
+      # Runs the real migration against a real PostGIS. This is the only place
+      # the schema is proven to work at all — the migration is hand-written raw
+      # SQL, so nothing else validates it.
+      - name: Apply migrations
+        run: uv run alembic upgrade head
+
+      # Running it twice proves idempotency. Deploys run migrations on every
+      # release; a migration that fails on second application is a broken
+      # deploy waiting to happen.
+      - name: Re-apply migrations (must be a no-op)
+        run: uv run alembic upgrade head
+
       - name: Tests (pytest)
-        run: uv run pytest
+        run: uv run pytest -q
 
   frontend:
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: frontend
+
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # `npm ci` not `npm install`: it installs exactly the lockfile and fails
+      # if package.json and the lockfile disagree. That disagreement is a real
+      # failure mode of dependency PRs, and it should be loud.
       - name: Install dependencies
-        run: npm install
-      - name: Typecheck
+        run: npm ci
+
+      - name: Type check
         run: npm run typecheck
+
       - name: Build
         run: npm run build
