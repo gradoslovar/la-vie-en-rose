@@ -94,10 +94,20 @@ step and has not been done.
 
 ## Actions
 
-Pinned to major version tags today. **Full commit SHAs are the hardened
-standard and are an open task** — not done yet because a fabricated SHA breaks
-CI outright and each must be read from the action's own repository. Dependabot
-maintains either form.
+**Latest major version tag, kept current by Dependabot.** In use:
+`actions/checkout@v7`, `actions/setup-node@v7`, `astral-sh/setup-uv@v9`,
+`actions/dependency-review-action@v5`, `superfly/flyctl-actions/setup-flyctl@1.5`.
+
+**Never a branch reference.** `@master` or `@main` is not a version — it means CI
+runs whatever that branch contains today. The Fly action was on `@master` until
+it was pinned to a release; do not put it back.
+
+Commit-SHA pinning was considered and **declined**: a tag is a mutable pointer
+the action's owner can repoint at any commit, which is how the
+`tj-actions/changed-files` compromise leaked secrets from thousands of
+repositories in 2025 — but the readability cost was judged not worth it here.
+This is a live trade-off, not a settled fact. If it is revisited, Dependabot
+maintains SHAs just as happily.
 
 ## Comments in configuration files
 

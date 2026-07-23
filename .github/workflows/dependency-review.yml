@@ -22,9 +22,9 @@ jobs:
   dependency-review:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/dependency-review-action@v4
+      - uses: actions/dependency-review-action@v5
         with:
           # `low` is the action's default and blocks on advisories that often
           # have no available fix, especially in transitive dependencies. A

@@ -22,8 +22,8 @@ jobs:
   provision:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - uses: actions/checkout@v7
+      - uses: superfly/flyctl-actions/setup-flyctl@1.5
 
       - name: Create apps if missing
         run: |
