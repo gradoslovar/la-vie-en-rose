@@ -1,0 +1,29 @@
+# Keeps the build context small and, more importantly, keeps secrets out of the
+# image. The Dockerfile does `COPY . .`, so without this file a local build
+# bakes in .env, the virtualenv, and every cache directory.
+
+# Secrets — the reason this file exists
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Python artefacts
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
+
+# Git and CI
+.git/
+.github/
+
+# Nothing here is needed at runtime
+tests/
+Dockerfile
+.dockerignore

@@ -1,7 +1,10 @@
 # Multi-stage build for Next.js standalone output.
 FROM node:22-slim AS deps
 WORKDIR /app
-COPY package.json package-lock.json* ./
+# No glob on the lockfile: it exists, and `npm ci` is meaningless without it.
+# A missing lockfile should fail the build loudly rather than silently
+# resolving different versions than CI tested.
+COPY package.json package-lock.json ./
 RUN npm ci
 
 FROM node:22-slim AS builder
