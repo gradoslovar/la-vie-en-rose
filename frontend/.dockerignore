@@ -1,0 +1,20 @@
+# Keeps the build context small and keeps secrets out of the image.
+#
+# node_modules is excluded deliberately: it is reinstalled inside the image by
+# `npm ci`. Copying the host's copy in would be slower and can break outright,
+# because some packages compile platform-specific binaries.
+
+.env
+.env.*
+!.env.example
+
+node_modules/
+.next/
+out/
+build/
+
+.git/
+.github/
+
+Dockerfile
+.dockerignore

@@ -108,6 +108,19 @@ jobs:
       - name: Type check (pyright)
         run: uv run pyright
 
+      # Two migrations claiming the same parent produce divergent heads, which
+      # is painful to untangle once it has happened and trivial to prevent.
+      # `alembic upgrade head` fails outright with multiple heads, so catching
+      # it here gives a clear message instead of a confusing deploy failure.
+      - name: Single migration head
+        run: |
+          heads=$(uv run alembic heads | grep -c .)
+          if [ "$heads" -ne 1 ]; then
+            echo "::error::expected 1 migration head, found $heads"
+            uv run alembic heads
+            exit 1
+          fi
+
       # Runs the real migration against a real PostGIS. This is the only place
       # the schema is proven to work at all — the migration is hand-written raw
       # SQL, so nothing else validates it.
@@ -122,6 +135,14 @@ jobs:
 
       - name: Tests (pytest)
         run: uv run pytest -q
+
+      # Builds the image CI has just tested the code of. Deliberately part of
+      # this job rather than a separate one: `backend` is already a required
+      # check, so a broken Dockerfile cannot reach main without also changing
+      # branch protection. No registry push — Fly's remote builder builds the
+      # deployed image, so this is validation, not artefact production.
+      - name: Build image
+        run: docker build -t lvr-backend:ci .
 
   frontend:
     runs-on: ubuntu-latest
@@ -149,3 +170,7 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      # Same reasoning as the backend image build above.
+      - name: Build image
+        run: docker build -t lvr-frontend:ci .

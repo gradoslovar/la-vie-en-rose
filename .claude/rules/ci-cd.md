@@ -39,7 +39,19 @@ green run full of skips.
 **Migrations are applied twice.** The second application must be a no-op.
 Deploys run migrations on every release.
 
-Checks in order: ruff lint, ruff format, pyright, migrate, migrate again, pytest.
+Checks in order: ruff lint, ruff format, pyright, single-migration-head,
+migrate, migrate again, pytest, build the image.
+
+**The image builds live inside the `backend` and `frontend` jobs, not in a job
+of their own.** Those two are already required checks, so a broken Dockerfile
+cannot reach main. A separate `docker` job would not be required until someone
+added it to branch protection, and would be silently optional until then.
+
+No registry push. Fly's remote builder builds the deployed image, so CI's build
+is validation only — the artefact CI builds is not the artefact that ships.
+Build-once-deploy-that-image is a real improvement and a deliberate later step;
+it was not adopted before the first successful deploy, to avoid debugging
+registry authentication and an unproven deployment at the same time.
 
 Pyright runs in `standard` mode, not `strict`. GeoAlchemy2's type information is
 incomplete and strict reports correct schema code as errors — a type checker
@@ -119,6 +131,25 @@ the action's owner can repoint at any commit, which is how the
 repositories in 2025 — but the readability cost was judged not worth it here.
 This is a live trade-off, not a settled fact. If it is revisited, Dependabot
 maintains SHAs just as happily.
+
+## Images
+
+**Both directories have a `.dockerignore`, and they are not optional.** Each
+Dockerfile does `COPY . .`; without the ignore file a build bakes `.env`, the
+virtualenv or `node_modules`, and every cache directory into the image. The
+`.env` case is a secret-leak path, not just bloat.
+
+**Base and tool images are pinned to exact versions.** `uv` is pinned in
+`backend/Dockerfile` rather than tracking `:latest` — a floating tag in a
+shipped artefact is worse than a floating tag in a workflow, because it is
+baked in. Bump deliberately.
+
+**The backend image runs unprivileged and does not carry `uv` at runtime.** The
+virtualenv is on `PATH`, so the entrypoint is `uvicorn` directly and
+`release_command` in `fly.backend.toml` is `alembic upgrade head`, not
+`uv run alembic …`. `uv run` wants a writable cache directory that an
+unprivileged user may not have; requiring one to start a container is a needless
+failure mode.
 
 ## Comments in configuration files
 
