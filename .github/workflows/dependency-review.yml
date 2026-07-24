@@ -1,0 +1,63 @@
+# Blocks pull requests that introduce a vulnerable or wrongly-licensed
+# dependency. Complements Dependabot rather than duplicating it:
+#
+#   Dependabot          tells you about vulnerabilities in what you already have.
+#   Dependency review   stops a new one from getting in.
+#
+# Available because this repository is public. On a private repository it would
+# require GitHub Advanced Security.
+#
+# NOT YET A REQUIRED CHECK. Adding this workflow does not make it blocking —
+# `dependency-review` has to be added to the branch protection rule on main by
+# hand. Until then it reports and is ignorable.
+
+name: Dependency review
+
+on: [pull_request]
+
+permissions:
+  contents: read
+
+jobs:
+  dependency-review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/dependency-review-action@v5.0.0
+        with:
+          # `low` is the action's default and blocks on advisories that often
+          # have no available fix, especially in transitive dependencies. A
+          # gate that blocks with no remedy is a gate people switch off.
+          # `moderate` is the common production threshold.
+          fail-on-severity: moderate
+
+          # Only runtime dependencies block. A vulnerability in ruff or pytest
+          # does not ship anywhere — it is also what the repository's enabled
+          # Dependabot preset already auto-dismisses, so blocking on it here
+          # would contradict that setting.
+          fail-on-scopes: runtime
+
+          # An allow-list, because `deny-licenses` is deprecated for removal.
+          # Permissive plus weak copyleft. The notable exclusion is AGPL: its
+          # obligations trigger on network use, and this project is a hosted
+          # public website — exactly the case AGPL is written for. Nothing
+          # about that is hostile to AGPL software; it simply is not compatible
+          # with how this project is licensed and served.
+          #
+          # A legitimate dependency under an unlisted license WILL fail this
+          # check. That is the intended behaviour: add the license here
+          # deliberately, having read it.
+          allow-licenses: >-
+            MIT, ISC, Apache-2.0, BSD-2-Clause, BSD-3-Clause, 0BSD,
+            Python-2.0, PSF-2.0, Unlicense, CC0-1.0, MPL-2.0, LGPL-2.1,
+            LGPL-3.0, Zlib, BlueOak-1.0.0, CC-BY-4.0
+
+          # A comment on failure, so the reason is in the PR rather than buried
+          # in a job log.
+          comment-summary-in-pr: on-failure
+
+    # Needed by comment-summary-in-pr. Scoped to this job only.
+    permissions:
+      contents: read
+      pull-requests: write

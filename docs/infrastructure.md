@@ -78,7 +78,8 @@ the owner prefers deliberate control over the rest.
 
 | Workflow | Trigger | What it does |
 |---|---|---|
-| `ci.yml` | push to main, PRs | lint, format check, tests, frontend typecheck + build |
+| `ci.yml` | push to main, PRs | ruff, pyright, migrations against PostGIS (twice), pytest; frontend typecheck + build |
+| `dependency-review.yml` | PRs | blocks new vulnerable or wrongly-licensed dependencies |
 | `provision.yml` | manual | creates apps, volume, and backup bucket — idempotent |
 | `deploy.yml` | merge to main | deploys db → backend → frontend, verifies health |
 | `backup.yml` | nightly 03:17 UTC | dump, **verify it restores**, upload, prune >90 days |

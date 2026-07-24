@@ -2,6 +2,38 @@
 
 Read `PROJECT.md` first. It describes the project: the mission, the architecture, the decisions, the vocabulary. This file tells you how to work on it.
 
+## Where things are written down
+
+| Document | What it holds |
+|---|---|
+| `PROJECT.md` | The mission, the architecture, the decisions, the vocabulary. Written in the owner's voice. |
+| `CLAUDE.md` (this file) | How to work on the project. The index to everything else. |
+| `docs/database-schema.md` | The data model and the reasoning behind it. |
+| `docs/infrastructure.md` | What runs, where, why, and the accepted trade-offs. |
+| `docs/testing.md` | What is tested, how, and what must pass before merge. |
+| `.claude/rules/ci-cd.md` | Operational rules for CI, dependency updates, and deployment. |
+
+`docs/` describes the system for any reader. `.claude/rules/` states rules you
+must follow. Nothing is duplicated between them — when a rule needs context,
+it links to the document rather than restating it.
+
+## Decisions that need the owner's approval
+
+Propose these and wait. Do not decide them and report afterwards:
+
+- **Security posture** — permissions, secrets handling, access scopes, anything a workflow is allowed to write to.
+- **Adding, removing, or changing dependencies and hosted services.**
+- **Anything with a recurring cost.**
+- **The content of documents written in the owner's voice** (`PROJECT.md`, `README.md`) — propose wording, do not author it.
+- **Adding files to the repository that are not part of the project itself.**
+
+When uncertain whether something clears this bar, ask. Asking is cheap; the
+alternative is the owner discovering decisions instead of making them.
+
+**Do not state facts about external services from memory.** Verify them, or say
+plainly that the information is unverified. Fluent confidence about an
+unchecked detail is worse than an admitted gap.
+
 ## How this project is being built
 
 - **Phase 1:** vision and architecture defined in conversation on claude.ai; foundational documents and scaffold produced there.
