@@ -27,7 +27,7 @@ jobs:
   scale:
     runs-on: ubuntu-latest
     steps:
-      - uses: superfly/flyctl-actions/setup-flyctl@1.5
+      - uses: superfly/flyctl-actions/setup-flyctl@1.6
 
       - name: Guard against scaling the database to zero by accident
         if: ${{ (inputs.app == 'lvr-db' || inputs.app == 'all') && inputs.count == '0' }}
