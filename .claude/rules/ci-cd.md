@@ -94,9 +94,20 @@ step and has not been done.
 
 ## Actions
 
-**Latest major version tag, kept current by Dependabot.** In use:
-`actions/checkout@v7`, `actions/setup-node@v7`, `astral-sh/setup-uv@v9`,
-`actions/dependency-review-action@v5`, `superfly/flyctl-actions/setup-flyctl@1.5`.
+**Latest available tag, kept current by Dependabot.** In use:
+`actions/checkout@v7`, `actions/setup-node@v7`, `astral-sh/setup-uv@v9.0.0`,
+`actions/dependency-review-action@v5.0.0`,
+`superfly/flyctl-actions/setup-flyctl@1.5`.
+
+**Not every action publishes a floating major tag.** `checkout` and `setup-node`
+do. `setup-uv` stopped at `v7` while releasing v9; `dependency-review-action` has
+none past `v3`. For those, the full version is the only reference that resolves —
+`@v9` fails the run with "unable to find version". A release name on the
+marketplace page is not proof of a resolvable tag. Verify before changing:
+
+```
+git ls-remote --tags https://github.com/<owner>/<repo> | grep <tag>
+```
 
 **Never a branch reference.** `@master` or `@main` is not a version — it means CI
 runs whatever that branch contains today. The Fly action was on `@master` until

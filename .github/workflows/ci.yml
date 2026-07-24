@@ -16,10 +16,27 @@
 #      PR merging with zero checks actually run. Every push runs everything.
 #      This project is small; correctness is cheaper than the saved minutes.
 #
-# Actions are pinned to major tags. Pinning to full commit SHAs is the
-# hardened standard and is tracked as a task — it is not done here because a
-# fabricated SHA breaks CI outright, and each one must be read from the
-# action's repository. Dependabot maintains either form.
+# ACTION VERSIONS: latest available tag, kept current by Dependabot.
+#
+# NOT EVERY ACTION PUBLISHES A FLOATING MAJOR TAG. `actions/checkout` and
+# `actions/setup-node` do, so `@v7` resolves. `astral-sh/setup-uv` stopped at
+# `v7` even though it releases v9, and `actions/dependency-review-action` has
+# none past `v3` — for those the full version is the only thing that resolves,
+# and `@v9` fails the run outright with "unable to find version".
+#
+# Before changing a version here, verify the tag exists:
+#     git ls-remote --tags https://github.com/<owner>/<repo> | grep <tag>
+# A release name on the marketplace page is not proof of a resolvable tag.
+#
+# Not commit SHAs. SHA pinning is the harder supply-chain standard — a tag is a
+# mutable pointer the action's owner can repoint at any commit, which is how the
+# tj-actions/changed-files compromise leaked secrets from thousands of
+# repositories in 2025. Considered and declined: the readability cost was judged
+# not worth it here. Dependabot maintains SHAs just as happily if revisited.
+#
+# Never a branch reference. `@master` is not a version — it means CI runs
+# whatever that branch contains today. The Fly action was on `@master` until it
+# was pinned to a release; do not put it back.
 
 name: CI
 
